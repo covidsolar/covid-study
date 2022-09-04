@@ -1,0 +1,4 @@
+[submodule "data_source"]
+	path = data_source
+	url = https://github.com/CSSEGISandData/COVID-19.git
+	shallow = true
