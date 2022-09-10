@@ -63,7 +63,25 @@ async Task<List<SourceCovidData>> ReadDataFromCsv(string path)
             records.Add(record);
         }
     }
-    return records;
+    return aggregateData(records);
+}
+
+List<SourceCovidData> aggregateData(List<SourceCovidData> data)
+{
+    var aggregatedData = new List<SourceCovidData>();
+    var groupedData = data.GroupBy(d => d.region);
+    foreach (var group in groupedData)
+    {
+        var record = new SourceCovidData();
+        record.region = group.Key;
+        record.confirmed = group.Sum(d => d.confirmed);
+        record.deaths = group.Sum(d => d.deaths);
+        record.recovered = group.Sum(d => d.recovered);
+        record.active = group.Sum(d => d.active);
+        record.incident_rate = group.Average(d => d.incident_rate);
+        aggregatedData.Add(record);
+    }
+    return aggregatedData;
 }
 
 // Read an integer from a string, returning 0 if the string is empty
