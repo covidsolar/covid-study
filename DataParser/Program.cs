@@ -121,7 +121,7 @@ public class Program
         return Task.FromResult(0);
     }
 
-    public static async Task<List<SourceCovidData>> ReadDataFromCsvFile(string path)
+    public static Task<List<SourceCovidData>> ReadDataFromCsvFile(string path)
     {
         var records = new List<SourceCovidData>();
         using (var reader = new StreamReader(path))
@@ -187,7 +187,7 @@ public class Program
                 records.Add(record);
             }
         }
-        return aggregateData(records);
+        return Task.FromResult(aggregateData(records));
     }
     public static List<SourceCovidData> aggregateData(List<SourceCovidData> data)
     {
