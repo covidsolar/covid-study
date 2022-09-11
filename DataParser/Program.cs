@@ -5,10 +5,11 @@ using System.Text.RegularExpressions;
 IEnumerable<string> files = Directory.EnumerateFiles("../data_source/csse_covid_19_data/csse_covid_19_daily_reports", "*.csv");
 Regex dateMatcher = new Regex("(?<month>\\d{2})-(?<date>\\d{2})-(?<year>\\d{4})");
 Dictionary<DateTime, List<SourceCovidData>> data = new Dictionary<DateTime, List<SourceCovidData>>();
-Parallel.ForEach(files,async file => {
+Parallel.ForEach(files, async file =>
+{
     string fileName = Path.GetFileNameWithoutExtension(file);
     Console.WriteLine($"Parsing {fileName}");
-    List<SourceCovidData> records = await ReadDataFromCsv(file);;
+    List<SourceCovidData> records = await ReadDataFromCsv(file); ;
     MatchCollection matches = dateMatcher.Matches(fileName);
     if (matches.Count == 1)
     {
@@ -45,7 +46,8 @@ async Task<List<SourceCovidData>> ReadDataFromCsv(string path)
             record.confirmed = ReadInt(csv.GetField("Confirmed"));
             record.deaths = ReadInt(csv.GetField("Deaths"));
             record.recovered = ReadInt(csv.GetField("Recovered"));
-            if (incidentRateHeader != null) {
+            if (incidentRateHeader != null)
+            {
                 record.incident_rate = ReadDouble(csv.GetField(incidentRateHeader));
             }
             if (isOldFormat)
@@ -85,21 +87,29 @@ List<SourceCovidData> aggregateData(List<SourceCovidData> data)
 }
 
 // Read an integer from a string, returning 0 if the string is empty
-int ReadInt(string value) {
+int ReadInt(string value)
+{
     int result = 0;
-    try {
+    try
+    {
         result = Int32.Parse(value);
-    } catch (Exception e) {
+    }
+    catch (Exception e)
+    {
         result = 0;
     }
     return result;
 }
 
-double ReadDouble(string value) {
+double ReadDouble(string value)
+{
     double result = 0;
-    try {
+    try
+    {
         result = Double.Parse(value);
-    } catch (Exception e) {
+    }
+    catch (Exception e)
+    {
         result = 0;
     }
     return result;
@@ -107,7 +117,7 @@ double ReadDouble(string value) {
 
 public class SourceCovidData
 {
-    public string region { get; set; }
+    public string region { get; set; } = "";
     public int confirmed { get; set; }
     public int deaths { get; set; }
     public int recovered { get; set; }
