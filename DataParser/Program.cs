@@ -99,14 +99,7 @@ public class Program
                             command.Parameters["@recovered"].Value = record.recovered;
                             command.Parameters["@active"].Value = record.active;
                             command.Parameters["@incident_rate"].Value = record.incident_rate;
-                            if (record.confirmed == 0)
-                            {
-                                command.Parameters["@case_fatality_ratio"].Value = 0;
-                            }
-                            else
-                            {
-                                command.Parameters["@case_fatality_ratio"].Value = (double)record.deaths / (double)record.confirmed;
-                            }
+                            command.Parameters["@case_fatality_ratio"].Value = record.case_fatality_ratio;
                             command.ExecuteNonQuery();
                         }
                     }
@@ -132,7 +125,10 @@ public class Program
             }
 
             bool isOldFormat = Array.Exists(csv.HeaderRecord, element => element == "Country/Region");
-            string incidentRateHeader = Array.Find(csv.HeaderRecord, str => str.StartsWith("Incid") && str.EndsWith("Rate"));
+            string? incidentRateHeader = Array.Find(csv.HeaderRecord, str => str.StartsWith("Incid") && str.EndsWith("Rate"));
+            string? caseFatalityRatioHeader = Array.Find(csv.HeaderRecord, str => str.Contains("Fatality_Ratio"));
+            string? provinceHeader = Array.Find(csv.HeaderRecord, str => str.StartsWith("Province"));
+            
             while (csv.Read())
             {
                 var record = new SourceCovidData();
@@ -155,6 +151,29 @@ public class Program
                     record.region = csv.GetField("Country_Region");
                     record.active = ReadInt(csv.GetField("Active"));
                 }
+                // Unify the reference to China
+                if (record.region == "Mainland China")
+                {
+                    record.region = "China";
+                }
+                // Unify the reference to Hong Kong
+                if (provinceHeader != null && csv.GetField(provinceHeader) == "Hong Kong")
+                {
+                    record.region = "Hong Kong";
+                }
+
+                Console.WriteLine($"caseFatalityRatioHeader: {caseFatalityRatioHeader}");
+                // Fill the fatality ratio
+                if (caseFatalityRatioHeader != null)
+                {
+                    record.case_fatality_ratio = ReadDouble(csv.GetField(caseFatalityRatioHeader));
+                } else if (record.confirmed > 0) {
+                    // Estimated formula
+                    record.case_fatality_ratio = record.deaths / (double)record.confirmed * 100.0;
+                } else {
+                    record.case_fatality_ratio = 0;
+                }
+
                 records.Add(record);
             }
         }
@@ -173,6 +192,7 @@ public class Program
             record.recovered = group.Sum(d => d.recovered);
             record.active = group.Sum(d => d.active);
             record.incident_rate = group.Average(d => d.incident_rate);
+            record.case_fatality_ratio = group.Average(d => d.case_fatality_ratio);
             aggregatedData.Add(record);
         }
         return aggregatedData;
@@ -215,4 +235,5 @@ public class SourceCovidData
     public int recovered { get; set; }
     public int active { get; set; }
     public double incident_rate { get; set; }
+    public double case_fatality_ratio {get; set; }
 }
