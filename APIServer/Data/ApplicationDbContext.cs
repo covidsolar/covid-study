@@ -17,6 +17,6 @@ namespace APIServer.Data
                 .HasKey(nameof(DailyCaseSummary.date), nameof(DailyCaseSummary.region));
         }
 
-        public DbSet<DailyCaseSummary> DailyCaseSummaries { get; set; }
+        public DbSet<DailyCaseSummary>? DailyCaseSummaries { get; set; }
     }
 }

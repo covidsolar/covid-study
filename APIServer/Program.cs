@@ -8,7 +8,7 @@ if (args.Length != 1)
 }
 var connectionString = $"Data Source={args[0]};";
 var builder = WebApplication.CreateBuilder(args);
-Console.WriteLine($"Hello World! {String.Join(" ", args)}");
+
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
@@ -31,5 +31,6 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
+// Simple Error Handling
 app.UseStatusCodePages();
 app.Run();
