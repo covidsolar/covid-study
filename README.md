@@ -7,14 +7,18 @@ Or setup the submodule after clone
 
 ## Build and Run
 ### Using Docker:
-arm64/apple:  
+arm64 (Tested on m1 mac):  
 `docker build -f ./Dockerfile.arm64 . --tag covid-study`  
 
-amd64:  
+x86_64:  
 `docker build . --tag covid-study`
 
 Run the app:  
 `docker run -d -p 8080:80 covid-study` // Or choose any port if 8080 is occupied
+
+Test build:
+`docker build -f ./Dockerfile.Test.arm64 . --tag covid-study-test` // arm64
+`docker build -f ./Dockerfile.Test . --tag covid-study-test` // x86_64
 
 Open the browser at http://localhost:8080/. API Explorer at http://localhost:8080/swagger/
 
@@ -23,6 +27,7 @@ Open the browser at http://localhost:8080/. API Explorer at http://localhost:808
 2. `dotnet run --project APIServer ./data.sqlite`
 3. Open the browser at http://localhost:5029/.  API Explorer at http://localhost:5029/swagger/
 
+run `dotnet test` at repo root to run the test.
 ## Syncing data from source
 Use the command `git submodule update --remote` to sync data_source with `git@github.com:CSSEGISandData/COVID-19.git`.
 

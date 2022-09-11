@@ -1,0 +1,8 @@
+FROM mcr.microsoft.com/dotnet/sdk:7.0.100-preview.7-bullseye-slim-amd64 AS build-env
+
+WORKDIR /app
+COPY DataParser ./DataParser
+COPY DataParser.Tests ./DataParser.Tests
+COPY APIServer ./APIServer
+COPY covid-study.sln ./
+RUN dotnet test

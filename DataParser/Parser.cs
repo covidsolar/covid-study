@@ -1,5 +1,6 @@
 ﻿using CsvHelper;
 using System;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 
@@ -25,19 +26,18 @@ namespace DataParser
             }
         }
 
-        public static Task<SortedDictionary<DateTime, List<SourceCovidData>>> ReadDataDirectory(string path)
+        public static async Task<SortedDictionary<DateTime, List<SourceCovidData>>> ReadDataDirectory(string path)
         {
             IEnumerable<string> files = Directory.EnumerateFiles(path, "*.csv");
-            SortedDictionary<DateTime, List<SourceCovidData>> data = new SortedDictionary<DateTime, List<SourceCovidData>>();
-            Parallel.ForEach(files, async file =>
+            var data = new ConcurrentDictionary<DateTime, List<SourceCovidData>>();
+            await Parallel.ForEachAsync(files, async (file, cancellationToken) =>
             {
-
                 try
                 {
                     var fileName = Path.GetFileNameWithoutExtension(file);
                     var records = await ReadDataFromCsvFile(file); ;
                     var date = ParseDateFromFileName(fileName);
-                    data.Add(date, records);
+                    data.AddOrUpdate(date, records, (k, v) => records);
                     Console.WriteLine($"Successfully parsed {records.Count} records from {fileName}");
                 }
                 catch
@@ -45,7 +45,12 @@ namespace DataParser
                     Console.Error.WriteLine($"Unable to parse date from file name {file}");
                 }
             });
-            return Task.FromResult(data);
+            SortedDictionary<DateTime, List<SourceCovidData>> result = new();
+            foreach (var item in data)
+            {
+               result.Add(item.Key, item.Value);
+            }
+            return result;
         }
 
         public static Task<List<SourceCovidData>> ReadDataFromCsvFile(string path)

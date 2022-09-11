@@ -46,15 +46,9 @@ public class UnitTest1
     }
 
     [Fact]
-    public void ParseDirectoryToData()
+    public async void ParseDirectoryToData()
     {
-        var data = DataParser.Parser.ReadDataDirectory("../../../fixtures/data-directory").Result;
-        foreach (var item in data)
-        {
-            item.Key.ToString();
-            
-        }
+        var data = await DataParser.Parser.ReadDataDirectory("../../../fixtures/data-directory");
         Assert.Equal(3, data.Count);
-        // Assert.Equal(3, data.Count);
     }
 }
