@@ -67,7 +67,16 @@ public class Program
             {
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = "CREATE TABLE IF NOT EXISTS covid_data (date TEXT, region TEXT, confirmed INTEGER, deaths INTEGER, recovered INTEGER, active INTEGER, incident_rate REAL, case_fatality_ratio REAL)";
+                    command.CommandText = @"CREATE TABLE IF NOT EXISTS covid_data (
+                        date TEXT,
+                        region TEXT,
+                        confirmed INTEGER,
+                        deaths INTEGER,
+                        recovered INTEGER,
+                        active INTEGER,
+                        incident_rate REAL,
+                        case_fatality_ratio REAL,
+                        PRIMARY KEY (date, region))";
                     command.ExecuteNonQuery();
                 }
                 using (var command = connection.CreateCommand())
@@ -78,7 +87,9 @@ public class Program
                 using (var command = connection.CreateCommand())
                 {
 
-                    command.CommandText = "INSERT INTO covid_data (date, region, confirmed, deaths, recovered, active, incident_rate, case_fatality_ratio) VALUES (@date, @region, @confirmed, @deaths, @recovered, @active, @incident_rate, @case_fatality_ratio)";
+                    command.CommandText = @"INSERT INTO covid_data
+                        (date, region, confirmed, deaths, recovered, active, incident_rate, case_fatality_ratio) VALUES
+                        (@date, @region, @confirmed, @deaths, @recovered, @active, @incident_rate, @case_fatality_ratio)";
                     command.Parameters.Add("@date", SqliteType.Text);
                     command.Parameters.Add("@region", SqliteType.Text);
                     command.Parameters.Add("@cases", SqliteType.Integer);
@@ -162,7 +173,6 @@ public class Program
                     record.region = "Hong Kong";
                 }
 
-                Console.WriteLine($"caseFatalityRatioHeader: {caseFatalityRatioHeader}");
                 // Fill the fatality ratio
                 if (caseFatalityRatioHeader != null)
                 {
