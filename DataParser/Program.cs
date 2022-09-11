@@ -1,118 +1,210 @@
 ﻿using CsvHelper;
 using System;
 using System.Text.RegularExpressions;
+using Microsoft.Data.Sqlite;
 
-IEnumerable<string> files = Directory.EnumerateFiles("../data_source/csse_covid_19_data/csse_covid_19_daily_reports", "*.csv");
-Regex dateMatcher = new Regex("(?<month>\\d{2})-(?<date>\\d{2})-(?<year>\\d{4})");
-Dictionary<DateTime, List<SourceCovidData>> data = new Dictionary<DateTime, List<SourceCovidData>>();
-Parallel.ForEach(files, async file =>
+
+public class Program
 {
-    string fileName = Path.GetFileNameWithoutExtension(file);
-    Console.WriteLine($"Parsing {fileName}");
-    List<SourceCovidData> records = await ReadDataFromCsv(file); ;
-    MatchCollection matches = dateMatcher.Matches(fileName);
-    if (matches.Count == 1)
+    public static async Task<int> Main(params string[] args)
     {
-        string month = matches[0].Groups["month"].Value;
-        string date = matches[0].Groups["date"].Value;
-        string year = matches[0].Groups["year"].Value;
-        string dateStr = $"{year}-{month}-{date}";
-        DateTime dateValue = DateTime.Parse(dateStr);
-        data.Add(dateValue, records);
-    }
-    else
-    {
-        Console.WriteLine($"Unable to parse date from file name {fileName}");
-    }
-    Console.WriteLine($"Successfully parsed {records.Count} records from {fileName}");
-});
-
-
-
-async Task<List<SourceCovidData>> ReadDataFromCsv(string path)
-{
-    var records = new List<SourceCovidData>();
-    using (var reader = new StreamReader(path))
-    using (var csv = new CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture))
-    {
-        csv.Read();
-        csv.ReadHeader();
-
-        bool isOldFormat = Array.Exists(csv.HeaderRecord, element => element == "Country/Region");
-        string incidentRateHeader = Array.Find(csv.HeaderRecord, str => str.StartsWith("Incid") && str.EndsWith("Rate"));
-        while (csv.Read())
+        if (args.Length == 2)
         {
-            var record = new SourceCovidData();
-            record.confirmed = ReadInt(csv.GetField("Confirmed"));
-            record.deaths = ReadInt(csv.GetField("Deaths"));
-            record.recovered = ReadInt(csv.GetField("Recovered"));
-            if (incidentRateHeader != null)
+            return await ConvertCsvToSqlite(args[0], args[1]);
+        }
+
+        Console.WriteLine("Usage: DataParser <input csv directory> <output sqlite file>");
+        return 1;
+    }
+    private static Regex dateMatcher = new Regex("(?<month>\\d{2})-(?<date>\\d{2})-(?<year>\\d{4})");
+    /// <summary>
+    /// Converts directory of csv files to sqlite database
+    /// </summary>
+    /// <param name="input">The path to the csv files that is to be converted.</param>
+    /// <param name="output">The target name of the output file after conversion.</param>
+    private static async Task<int> ConvertCsvToSqlite(string input, string output)
+    {
+        Console.WriteLine($"Converting CSV at {input} to {output}");
+        var data = await ReadDataDirectory(input);
+        await WriteDataToSqlite(data, output);
+        return 0;
+    }
+
+    public static Task<SortedDictionary<DateTime, List<SourceCovidData>>> ReadDataDirectory(string path)
+    {
+        IEnumerable<string> files = Directory.EnumerateFiles(path, "*.csv");
+        SortedDictionary<DateTime, List<SourceCovidData>> data = new SortedDictionary<DateTime, List<SourceCovidData>>();
+        Parallel.ForEach(files, async file =>
+        {
+            string fileName = Path.GetFileNameWithoutExtension(file);
+            List<SourceCovidData> records = await ReadDataFromCsvFile(file); ;
+            MatchCollection matches = dateMatcher.Matches(fileName);
+            if (matches.Count == 1)
             {
-                record.incident_rate = ReadDouble(csv.GetField(incidentRateHeader));
-            }
-            if (isOldFormat)
-            {
-                // Handle the 2020 format
-                record.region = csv.GetField("Country/Region");
-                record.active = record.confirmed - record.recovered - record.deaths;
+                string month = matches[0].Groups["month"].Value;
+                string date = matches[0].Groups["date"].Value;
+                string year = matches[0].Groups["year"].Value;
+                string dateStr = $"{year}-{month}-{date}";
+                DateTime dateValue = DateTime.Parse(dateStr);
+                data.Add(dateValue, records);
             }
             else
             {
-                // Handle the 2021 format
-                record.region = csv.GetField("Country_Region");
-                record.active = ReadInt(csv.GetField("Active"));
+                Console.WriteLine($"Unable to parse date from file name {fileName}");
             }
-            records.Add(record);
+            Console.WriteLine($"Successfully parsed {records.Count} records from {fileName}");
+        });
+        return Task.FromResult(data);
+    }
+
+    public static Task<int> WriteDataToSqlite(SortedDictionary<DateTime, List<SourceCovidData>> data, string path)
+    {
+        Console.WriteLine($"Writing data to {path}");
+        using (var connection = new SqliteConnection($"Data Source={path}"))
+        {
+            connection.Open();
+            using (var transaction = connection.BeginTransaction())
+            {
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "CREATE TABLE IF NOT EXISTS covid_data (date TEXT, region TEXT, confirmed INTEGER, deaths INTEGER, recovered INTEGER, active INTEGER, incident_rate REAL, case_fatality_ratio REAL)";
+                    command.ExecuteNonQuery();
+                }
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "DELETE FROM covid_data";
+                    command.ExecuteNonQuery();
+                }
+                using (var command = connection.CreateCommand())
+                {
+
+                    command.CommandText = "INSERT INTO covid_data (date, region, confirmed, deaths, recovered, active, incident_rate, case_fatality_ratio) VALUES (@date, @region, @confirmed, @deaths, @recovered, @active, @incident_rate, @case_fatality_ratio)";
+                    command.Parameters.Add("@date", SqliteType.Text);
+                    command.Parameters.Add("@region", SqliteType.Text);
+                    command.Parameters.Add("@cases", SqliteType.Integer);
+                    command.Parameters.Add("@deaths", SqliteType.Integer);
+                    command.Parameters.Add("@confirmed", SqliteType.Integer);
+                    command.Parameters.Add("@recovered", SqliteType.Integer);
+                    command.Parameters.Add("@active", SqliteType.Integer);
+                    command.Parameters.Add("@incident_rate", SqliteType.Real);
+                    command.Parameters.Add("@case_fatality_ratio", SqliteType.Real);
+                    foreach (var date in data.Keys)
+                    {
+                        foreach (var record in data[date])
+                        {
+                            command.Parameters["@date"].Value = date.ToString("yyyy-MM-dd");
+                            command.Parameters["@region"].Value = record.region;
+                            command.Parameters["@confirmed"].Value = record.confirmed;
+                            command.Parameters["@deaths"].Value = record.deaths;
+                            command.Parameters["@recovered"].Value = record.recovered;
+                            command.Parameters["@active"].Value = record.active;
+                            command.Parameters["@incident_rate"].Value = record.incident_rate;
+                            if (record.confirmed == 0)
+                            {
+                                command.Parameters["@case_fatality_ratio"].Value = 0;
+                            }
+                            else
+                            {
+                                command.Parameters["@case_fatality_ratio"].Value = (double)record.deaths / (double)record.confirmed;
+                            }
+                            command.ExecuteNonQuery();
+                        }
+                    }
+                }
+                transaction.Commit();
+            }
         }
+        return Task.FromResult(0);
     }
-    return aggregateData(records);
-}
 
-List<SourceCovidData> aggregateData(List<SourceCovidData> data)
-{
-    var aggregatedData = new List<SourceCovidData>();
-    var groupedData = data.GroupBy(d => d.region);
-    foreach (var group in groupedData)
+    public static async Task<List<SourceCovidData>> ReadDataFromCsvFile(string path)
     {
-        var record = new SourceCovidData();
-        record.region = group.Key;
-        record.confirmed = group.Sum(d => d.confirmed);
-        record.deaths = group.Sum(d => d.deaths);
-        record.recovered = group.Sum(d => d.recovered);
-        record.active = group.Sum(d => d.active);
-        record.incident_rate = group.Average(d => d.incident_rate);
-        aggregatedData.Add(record);
-    }
-    return aggregatedData;
-}
+        var records = new List<SourceCovidData>();
+        using (var reader = new StreamReader(path))
+        using (var csv = new CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture))
+        {
+            csv.Read();
+            csv.ReadHeader();
 
-// Read an integer from a string, returning 0 if the string is empty
-int ReadInt(string value)
-{
-    int result = 0;
-    try
-    {
-        result = Int32.Parse(value);
-    }
-    catch (Exception e)
-    {
-        result = 0;
-    }
-    return result;
-}
+            if (csv.HeaderRecord is null)
+            {
+                throw new Exception("Header record is null");
+            }
 
-double ReadDouble(string value)
-{
-    double result = 0;
-    try
-    {
-        result = Double.Parse(value);
+            bool isOldFormat = Array.Exists(csv.HeaderRecord, element => element == "Country/Region");
+            string incidentRateHeader = Array.Find(csv.HeaderRecord, str => str.StartsWith("Incid") && str.EndsWith("Rate"));
+            while (csv.Read())
+            {
+                var record = new SourceCovidData();
+                record.confirmed = ReadInt(csv.GetField("Confirmed"));
+                record.deaths = ReadInt(csv.GetField("Deaths"));
+                record.recovered = ReadInt(csv.GetField("Recovered"));
+                if (incidentRateHeader != null)
+                {
+                    record.incident_rate = ReadDouble(csv.GetField(incidentRateHeader));
+                }
+                if (isOldFormat)
+                {
+                    // Handle the 2020 format
+                    record.region = csv.GetField("Country/Region");
+                    record.active = record.confirmed - record.recovered - record.deaths;
+                }
+                else
+                {
+                    // Handle the 2021 format
+                    record.region = csv.GetField("Country_Region");
+                    record.active = ReadInt(csv.GetField("Active"));
+                }
+                records.Add(record);
+            }
+        }
+        return aggregateData(records);
     }
-    catch (Exception e)
+    public static List<SourceCovidData> aggregateData(List<SourceCovidData> data)
     {
-        result = 0;
+        var aggregatedData = new List<SourceCovidData>();
+        var groupedData = data.GroupBy(d => d.region);
+        foreach (var group in groupedData)
+        {
+            var record = new SourceCovidData();
+            record.region = group.Key;
+            record.confirmed = group.Sum(d => d.confirmed);
+            record.deaths = group.Sum(d => d.deaths);
+            record.recovered = group.Sum(d => d.recovered);
+            record.active = group.Sum(d => d.active);
+            record.incident_rate = group.Average(d => d.incident_rate);
+            aggregatedData.Add(record);
+        }
+        return aggregatedData;
     }
-    return result;
+    
+    private static int ReadInt(string value)
+    {
+        int result = 0;
+        try
+        {
+            result = Int32.Parse(value);
+        }
+        catch
+        {
+            result = 0;
+        }
+        return result;
+    }
+
+    private static double ReadDouble(string value)
+    {
+        double result = 0;
+        try
+        {
+            result = Double.Parse(value);
+        }
+        catch
+        {
+            result = 0;
+        }
+        return result;
+    }
 }
 
 public class SourceCovidData
