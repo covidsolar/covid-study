@@ -24,7 +24,7 @@ Open the browser at http://localhost:8080/. API Explorer at http://localhost:808
 
 ### Using `dotnet` command (development mode)
 1. `dotnet run --project DataParser ./data_source/csse_covid_19_data/csse_covid_19_daily_reports ./data.sqlite`
-2. `dotnet run --project APIServer ./data.sqlite`
+2. `dotnet run --project APIServer ../data.sqlite`
 3. Open the browser at http://localhost:5029/.  API Explorer at http://localhost:5029/swagger/
 
 run `dotnet test` at repo root to run the test.
